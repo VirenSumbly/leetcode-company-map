@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>LeetCode Company Problems</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: monospace;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 0 20px;
+            background: #111;
+            color: #eee;
+        }
+
+        h1 {
+            margin-bottom: 30px;
+        }
+
+        .stats {
+            display: flex;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .stat {
+            border: 1px solid #444;
+            padding: 15px 20px;
+        }
+
+        .stat strong {
+            display: block;
+            font-size: 24px;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 20px;
+            background: #181818;
+            border: 1px solid #444;
+            color: white;
+            font-family: inherit;
+        }
+
+        button {
+            padding: 8px 12px;
+            margin: 3px;
+            background: #181818;
+            border: 1px solid #444;
+            color: #eee;
+            cursor: pointer;
+            font-family: inherit;
+        }
+
+        button:hover {
+            background: #333;
+        }
+
+        .section {
+            margin-top: 35px;
+        }
+
+        .item {
+            border-bottom: 1px solid #292929;
+            padding: 10px 0;
+        }
+
+        .item a {
+            color: #8ab4f8;
+        }
+
+        .muted {
+            color: #777;
+        }
+
+        .tags {
+            color: #aaa;
+        }
+
+        #content {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>LeetCode Company Problems</h1>
+
+    <div class="stats">
+        <div class="stat">
+            <strong id="problem-count">-</strong>
+            Problems
+        </div>
+
+        <div class="stat">
+            <strong id="tag-count">-</strong>
+            Tags
+        </div>
+
+        <div class="stat">
+            <strong id="company-count">-</strong>
+            Companies
+        </div>
+    </div>
+
+    <input
+        id="search"
+        type="text"
+        placeholder="Search problems, companies, or tags..."
+    >
+    <button onclick="resetPage()">Reset</button>
+
+    <div id="content"></div>
+
+    <script>
+        let problems = {};
+        let tags = {};
+        let companies = {};
+
+        let selectedCompany = null;
+        let selectedTag = null;
+
+        function resetPage() {
+            selectedCompany = null;
+            selectedTag = null;
+
+            document.getElementById("search").value = "";
+
+            renderPage();
+        }
+
+        async function loadData() {
+            const [
+                problemsResponse,
+                tagsResponse,
+                companiesResponse
+            ] = await Promise.all([
+                fetch("problems.json"),
+                fetch("tags.json"),
+                fetch("companies.json")
+            ]);
+
+            problems = await problemsResponse.json();
+            tags = await tagsResponse.json();
+            companies = await companiesResponse.json();
+
+            document.getElementById("problem-count").textContent =
+                Object.keys(problems).length;
+
+            document.getElementById("tag-count").textContent =
+                Object.keys(tags).length;
+
+            document.getElementById("company-count").textContent =
+                Object.keys(companies).length;
+
+            showOverview();
+        }
+
+
+        function showOverview() {
+            renderPage();
+        }
+
+        function renderPage() {
+            const content = document.getElementById("content");
+
+            let filteredProblemIds = Object.keys(problems);
+
+            // Apply company filter
+            if (selectedCompany) {
+                filteredProblemIds = filteredProblemIds.filter(id =>
+                    problems[id].companies.includes(selectedCompany)
+                );
+            }
+
+            // Apply tag filter
+            if (selectedTag) {
+                filteredProblemIds = filteredProblemIds.filter(id =>
+                    problems[id].tags.includes(selectedTag)
+                );
+            }
+
+            // Find tags available within the current company filter
+            let availableTags = Object.keys(tags);
+
+            if (selectedCompany) {
+                availableTags = availableTags.filter(tag =>
+                    filteredProblemIds.some(id =>
+                        problems[id].tags.includes(tag)
+                    )
+                );
+            }
+
+            // Find companies available within the current tag filter
+            let availableCompanies = Object.keys(companies);
+
+            if (selectedTag) {
+                availableCompanies = availableCompanies.filter(company =>
+                    filteredProblemIds.some(id =>
+                        problems[id].companies.includes(company)
+                    )
+                );
+            }
+
+            content.innerHTML = `
+                <div class="section">
+                    <h2>Companies</h2>
+
+                    ${availableCompanies
+                        .sort()
+                        .map(company => `
+                            <button
+                                onclick="selectCompany('${escapeAttribute(company)}')"
+                                ${selectedCompany === company ? "style='border-color: white'" : ""}
+                            >
+                                ${escapeHtml(company)}
+                            </button>
+                        `)
+                        .join("")}
+                </div>
+
+                <div class="section">
+                    <h2>Tags</h2>
+
+                    ${availableTags
+                        .sort()
+                        .map(tag => `
+                            <button
+                                onclick="selectTag('${escapeAttribute(tag)}')"
+                                ${selectedTag === tag ? "style='border-color: white'" : ""}
+                            >
+                                ${escapeHtml(tag)}
+                            </button>
+                        `)
+                        .join("")}
+                </div>
+
+                <div class="section">
+                    <h2>
+                        Problems
+                        <span class="muted">(${filteredProblemIds.length})</span>
+                    </h2>
+
+                    <div id="problem-list"></div>
+                </div>
+            `;
+
+            showProblems(filteredProblemIds);
+        }
+
+
+        function showProblems(problemIds) {
+            const list = document.getElementById("problem-list");
+
+            list.innerHTML = problemIds
+                .sort((a, b) =>
+                    problems[a].title.localeCompare(problems[b].title)
+                )
+                .map(id => {
+                    const problem = problems[id];
+
+                    return `
+                        <div class="item">
+                            <a href="${problem.link}" target="_blank">
+                                ${escapeHtml(problem.title)}
+                            </a>
+
+                            <div class="muted">
+                                ${escapeHtml(problem.difficulty)}
+                            </div>
+
+                            <div class="tags">
+                                ${problem.tags.map(escapeHtml).join(", ")}
+                            </div>
+
+                            <div class="muted">
+                                ${problem.companies.map(escapeHtml).join(", ")}
+                            </div>
+                        </div>
+                    `;
+                })
+                .join("");
+        }
+
+
+
+
+        function selectCompany(company) {
+            if (selectedCompany === company) {
+                selectedCompany = null;
+            } else {
+                selectedCompany = company;
+            }
+
+            renderPage();
+        }
+        function selectTag(tag) {
+            if (selectedTag === tag) {
+                selectedTag = null;
+            } else {
+                selectedTag = tag;
+            }
+
+            renderPage();
+        }
+
+
+        document.getElementById("search").addEventListener("input", event => {
+            const query = event.target.value.toLowerCase().trim();
+
+            let matchingProblems = Object.keys(problems);
+
+            // Respect selected company
+            if (selectedCompany) {
+                matchingProblems = matchingProblems.filter(id =>
+                    problems[id].companies.includes(selectedCompany)
+                );
+            }
+
+            // Respect selected tag
+            if (selectedTag) {
+                matchingProblems = matchingProblems.filter(id =>
+                    problems[id].tags.includes(selectedTag)
+                );
+            }
+
+            // Apply search
+            if (query) {
+                matchingProblems = matchingProblems.filter(id => {
+                    const problem = problems[id];
+
+                    return (
+                        problem.title.toLowerCase().includes(query) ||
+                        problem.tags.some(tag =>
+                            tag.toLowerCase().includes(query)
+                        ) ||
+                        problem.companies.some(company =>
+                            company.toLowerCase().includes(query)
+                        )
+                    );
+                });
+            }
+
+            document.getElementById("content").innerHTML = `
+                <div class="section">
+                    <h2>Problems <span class="muted">(${matchingProblems.length})</span></h2>
+                    <div id="problem-list"></div>
+                </div>
+            `;
+
+            showProblems(matchingProblems);
+        });
+
+
+        
+
+
+       
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll("&", "&amp;")
+                .replaceAll("<", "&lt;")
+                .replaceAll(">", "&gt;")
+                .replaceAll('"', "&quot;")
+                .replaceAll("'", "&#039;");
+        }
+
+
+        function escapeAttribute(value) {
+            return String(value)
+                .replaceAll("\\", "\\\\")
+                .replaceAll("'", "\\'");
+        }
+
+
+        loadData();
+    </script>
+
+</body>
+</html>
