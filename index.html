@@ -128,10 +128,12 @@
 
         let selectedCompany = null;
         let selectedTag = null;
+        let selectedDifficulty = null;
 
         function resetPage() {
             selectedCompany = null;
             selectedTag = null;
+            selectedDifficulty = null;
 
             document.getElementById("search").value = "";
 
@@ -170,78 +172,133 @@
             renderPage();
         }
 
+                
         function renderPage() {
             const content = document.getElementById("content");
+            const allProblemIds = Object.keys(problems);
+            const query = document.getElementById("search").value
+                .toLowerCase()
+                .trim();
 
-            let filteredProblemIds = Object.keys(problems);
+            // Problems matching the selected company and tag
+            let filteredProblemIds = allProblemIds.filter(id => {
+                const problem = problems[id];
 
-            // Apply company filter
-            if (selectedCompany) {
-                filteredProblemIds = filteredProblemIds.filter(id =>
-                    problems[id].companies.includes(selectedCompany)
+                return (
+                    (!selectedCompany ||
+                        problem.companies.includes(selectedCompany)) &&
+                    (!selectedTag ||
+                        problem.tags.includes(selectedTag)) &&
+                    (!selectedDifficulty ||
+                        problem.difficulty.toLowerCase() ===
+                            selectedDifficulty.toLowerCase())
                 );
-            }
+            });
 
-            // Apply tag filter
-            if (selectedTag) {
-                filteredProblemIds = filteredProblemIds.filter(id =>
-                    problems[id].tags.includes(selectedTag)
-                );
-            }
+            // Keep available tags responsive to company + difficulty.
+            // Do not use selectedTag here, so other tags remain selectable.
+            const availableTags = Object.keys(tags).filter(tag =>
+                allProblemIds.some(id => {
+                    const problem = problems[id];
 
-            // Find tags available within the current company filter
-            let availableTags = Object.keys(tags);
+                    return (
+                        problem.tags.includes(tag) &&
+                        (!selectedCompany ||
+                            problem.companies.includes(selectedCompany)) &&
+                        (!selectedDifficulty ||
+                            problem.difficulty.toLowerCase() ===
+                                selectedDifficulty.toLowerCase())
+                    );
+                })
+            );
 
-            if (selectedCompany) {
-                availableTags = availableTags.filter(tag =>
-                    filteredProblemIds.some(id =>
-                        problems[id].tags.includes(tag)
-                    )
-                );
-            }
+            // Keep available companies responsive to tag + difficulty.
+            // Do not use selectedCompany here, so other companies remain selectable.
+            const availableCompanies = Object.keys(companies).filter(company =>
+                allProblemIds.some(id => {
+                    const problem = problems[id];
 
-            // Find companies available within the current tag filter
-            let availableCompanies = Object.keys(companies);
+                    return (
+                        problem.companies.includes(company) &&
+                        (!selectedTag ||
+                            problem.tags.includes(selectedTag)) &&
+                        (!selectedDifficulty ||
+                            problem.difficulty.toLowerCase() ===
+                                selectedDifficulty.toLowerCase())
+                    );
+                })
+            );
 
-            if (selectedTag) {
-                availableCompanies = availableCompanies.filter(company =>
-                    filteredProblemIds.some(id =>
-                        problems[id].companies.includes(company)
-                    )
-                );
+            // Keep available difficulties responsive to company + tag.
+            const availableDifficulties = ["EASY", "MEDIUM", "HARD"].filter(
+                difficulty =>
+                    allProblemIds.some(id => {
+                        const problem = problems[id];
+
+                        return (
+                            problem.difficulty.toUpperCase() === difficulty &&
+                            (!selectedCompany ||
+                                problem.companies.includes(selectedCompany)) &&
+                            (!selectedTag ||
+                                problem.tags.includes(selectedTag))
+                        );
+                    })
+            );
+
+            // Apply search to the final problem results only.
+            if (query) {
+                filteredProblemIds = filteredProblemIds.filter(id => {
+                    const problem = problems[id];
+
+                    return (
+                        problem.title.toLowerCase().includes(query) ||
+                        problem.tags.some(tag =>
+                            tag.toLowerCase().includes(query)
+                        ) ||
+                        problem.companies.some(company =>
+                            company.toLowerCase().includes(query)
+                        ) ||
+                        problem.difficulty.toLowerCase().includes(query)
+                    );
+                });
             }
 
             content.innerHTML = `
                 <div class="section">
                     <h2>Companies</h2>
-
-                    ${availableCompanies
-                        .sort()
-                        .map(company => `
-                            <button
-                                onclick="selectCompany('${escapeAttribute(company)}')"
-                                ${selectedCompany === company ? "style='border-color: white'" : ""}
-                            >
-                                ${escapeHtml(company)}
-                            </button>
-                        `)
-                        .join("")}
+                    ${availableCompanies.sort().map(company => `
+                        <button
+                            onclick="selectCompany('${escapeAttribute(company)}')"
+                            ${selectedCompany === company
+                                ? "style='border-color: white'"
+                                : ""}
+                        >${escapeHtml(company)}</button>
+                    `).join("")}
                 </div>
 
                 <div class="section">
                     <h2>Tags</h2>
+                    ${availableTags.sort().map(tag => `
+                        <button
+                            onclick="selectTag('${escapeAttribute(tag)}')"
+                            ${selectedTag === tag
+                                ? "style='border-color: white'"
+                                : ""}
+                        >${escapeHtml(tag)}</button>
+                    `).join("")}
+                </div>
 
-                    ${availableTags
-                        .sort()
-                        .map(tag => `
-                            <button
-                                onclick="selectTag('${escapeAttribute(tag)}')"
-                                ${selectedTag === tag ? "style='border-color: white'" : ""}
-                            >
-                                ${escapeHtml(tag)}
-                            </button>
-                        `)
-                        .join("")}
+                <div class="section">
+                    <h2>Difficulty</h2>
+                    ${availableDifficulties.map(difficulty => `
+                        <button
+                            onclick="selectDifficulty('${difficulty}')"
+                            ${selectedDifficulty === difficulty
+                                ? "style='border-color: white'"
+                                : ""}
+                        >${difficulty.charAt(0) +
+                            difficulty.slice(1).toLowerCase()}</button>
+                    `).join("")}
                 </div>
 
                 <div class="section">
@@ -249,7 +306,6 @@
                         Problems
                         <span class="muted">(${filteredProblemIds.length})</span>
                     </h2>
-
                     <div id="problem-list"></div>
                 </div>
             `;
@@ -303,6 +359,17 @@
 
             renderPage();
         }
+        
+        function selectDifficulty(difficulty) {
+            if (selectedDifficulty === difficulty) {
+                selectedDifficulty = null;
+            } else {
+                selectedDifficulty = difficulty;
+            }
+
+            renderPage();
+        }
+
         function selectTag(tag) {
             if (selectedTag === tag) {
                 selectedTag = null;
@@ -313,55 +380,11 @@
             renderPage();
         }
 
-
-        document.getElementById("search").addEventListener("input", event => {
-            const query = event.target.value.toLowerCase().trim();
-
-            let matchingProblems = Object.keys(problems);
-
-            // Respect selected company
-            if (selectedCompany) {
-                matchingProblems = matchingProblems.filter(id =>
-                    problems[id].companies.includes(selectedCompany)
-                );
-            }
-
-            // Respect selected tag
-            if (selectedTag) {
-                matchingProblems = matchingProblems.filter(id =>
-                    problems[id].tags.includes(selectedTag)
-                );
-            }
-
-            // Apply search
-            if (query) {
-                matchingProblems = matchingProblems.filter(id => {
-                    const problem = problems[id];
-
-                    return (
-                        problem.title.toLowerCase().includes(query) ||
-                        problem.tags.some(tag =>
-                            tag.toLowerCase().includes(query)
-                        ) ||
-                        problem.companies.some(company =>
-                            company.toLowerCase().includes(query)
-                        )
-                    );
-                });
-            }
-
-            document.getElementById("content").innerHTML = `
-                <div class="section">
-                    <h2>Problems <span class="muted">(${matchingProblems.length})</span></h2>
-                    <div id="problem-list"></div>
-                </div>
-            `;
-
-            showProblems(matchingProblems);
+                
+        document.getElementById("search").addEventListener("input", () => {
+            renderPage();
         });
-
-
-        
+    
 
 
        
